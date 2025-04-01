@@ -1,49 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { FaCalendarAlt, FaMapMarkerAlt, FaTag, FaInfoCircle, FaUser } from 'react-icons/fa';
+import { FaCalendarAlt, FaMapMarkerAlt, FaTag, FaInfoCircle, FaUser, FaTimes } from 'react-icons/fa';
 import ClaimForm from '../components/ClaimForm';
-import LoadingSpinner from '../components/LoadingSpinner'
+import LoadingSpinner from '../components/LoadingSpinner';
+import { AuthContext } from '../context/AuthContext';
 
 const ItemDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isGuard } = useContext(AuthContext);
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showClaimForm, setShowClaimForm] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const checkAdmin = () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const decoded = JSON.parse(atob(token.split('.')[1]));
-          setIsAdmin(decoded.role === 'admin');
-        } catch (e) {
-          setIsAdmin(false);
-        }
-      }
-    };
-
     const fetchItemDetails = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/items/${id}`);
-        setItem(response.data);
+        const apiUrl = `http://localhost:5000/api/items/${id}`;
+        const response = await axios.get(apiUrl);
+        
+        if (response.data && response.data.data) {
+          setItem(response.data.data);
+        } else if (response.data) {
+          setItem(response.data);
+        } else {
+          throw new Error('Invalid response format');
+        }
+        
         setLoading(false);
       } catch (err) {
-        setError('Failed to load item details');
+        console.error('Error fetching item details:', err);
+        setError('Failed to load item details. Please try again.');
         setLoading(false);
-        toast.error('Failed to load item details');
       }
     };
 
-    checkAdmin();
-    fetchItemDetails();
+    if (id) {
+      fetchItemDetails();
+    } else {
+      setError('Item ID is missing');
+      setLoading(false);
+    }
   }, [id]);
 
   const handleClaim = () => {
@@ -54,11 +56,28 @@ const ItemDetails = () => {
     setShowClaimForm(false);
   };
 
+  const handleClaimSubmitted = () => {
+    // Update item status locally
+    setItem(prev => ({ ...prev, status: 'claimed' }));
+    // Close the form
+    setShowClaimForm(false);
+    // Show success message
+    toast.success('Claim submitted successfully! Please visit the security office with your ID to collect the item.');
+  };
+
   const handleMarkAsDelivered = async () => {
     try {
+      // Create update data preserving the claimed information
+      const updateData = {
+        claimedBy: {
+          ...item.claimedBy,
+          claimedDate: item.claimedBy?.claimedDate || new Date().toISOString()
+        }
+      };
+      
       await axios.put(
-        `${process.env.REACT_APP_API_URL}/api/items/${id}/delivered`,
-        {},
+        `http://localhost:5000/api/items/${id}/delivered`,
+        updateData,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -73,13 +92,30 @@ const ItemDetails = () => {
       
       toast.success('Item marked as delivered successfully');
     } catch (err) {
+      console.error('Error marking item as delivered:', err);
       toast.error('Failed to mark item as delivered');
     }
   };
 
   const formatDate = (dateString) => {
     const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    try {
+      // Convert to dd-mm-yyyy format
+      return new Date(dateString).toLocaleDateString('en-GB', options);
+    } catch (e) {
+      return 'Invalid date';
+    }
+  };
+
+  // Function to get the full image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return '/assets/images/placeholder.png';
+    
+    // If it's a full URL already, return as is
+    if (imagePath.startsWith('http')) return imagePath;
+    
+    // Otherwise, prepend the server URL
+    return `http://localhost:5000${imagePath}`;
   };
 
   if (loading) {
@@ -93,7 +129,7 @@ const ItemDetails = () => {
           <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
           <p className="text-gray-700">{error}</p>
           <button
-            onClick={() => navigate('/items')}
+            onClick={() => navigate('/lost-items')}
             className="mt-6 bg-blue-600 text-white py-2 px-6 rounded-lg hover:bg-blue-700 transition duration-300"
           >
             Back to Items
@@ -113,7 +149,7 @@ const ItemDetails = () => {
       
       <div className="mb-6">
         <button
-          onClick={() => navigate('/items')}
+          onClick={() => navigate('/lost-items')}
           className="text-blue-600 hover:text-blue-800 flex items-center"
         >
           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -129,9 +165,13 @@ const ItemDetails = () => {
             <div className="h-80 bg-gray-200 flex items-center justify-center overflow-hidden">
               {item.image ? (
                 <img 
-                  src={item.image} 
+                  src={getImageUrl(item.image)} 
                   alt={item.name} 
                   className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = '/assets/images/placeholder.png';
+                  }}
                 />
               ) : (
                 <div className="text-gray-400">No image available</div>
@@ -147,16 +187,16 @@ const ItemDetails = () => {
                 ? 'bg-yellow-100 text-yellow-800' 
                 : 'bg-red-100 text-red-800'
             }`}>
-              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Unknown'}
             </div>
             
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">{item.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">{item.name || 'Unnamed Item'}</h1>
             
             <div className="mb-6">
               <div className="flex items-center text-gray-600 mb-2">
                 <FaTag className="mr-2" />
                 <span>Category: </span>
-                <span className="font-medium ml-1">{item.category}</span>
+                <span className="font-medium ml-1">{item.category || 'Uncategorized'}</span>
               </div>
               
               <div className="flex items-center text-gray-600 mb-2">
@@ -168,15 +208,27 @@ const ItemDetails = () => {
               <div className="flex items-center text-gray-600 mb-2">
                 <FaMapMarkerAlt className="mr-2" />
                 <span>Location: </span>
-                <span className="font-medium ml-1">{item.location}</span>
+                <span className="font-medium ml-1">{item.location || 'Unknown'}</span>
               </div>
               
               {item.claimedBy && (
-                <div className="flex items-center text-gray-600 mb-2">
-                  <FaUser className="mr-2" />
-                  <span>Claimed by: </span>
-                  <span className="font-medium ml-1">{item.claimedBy.name} ({item.claimedBy.rollNumber})</span>
-                </div>
+                <>
+                  <div className="flex items-center text-gray-600 mb-2">
+                    <FaUser className="mr-2" />
+                    <span>Claimed by: </span>
+                    <span className="font-medium ml-1">
+                      {item.claimedBy.studentName || item.claimedBy.name || 'Unknown'} 
+                      {item.claimedBy.rollNumber ? `(${item.claimedBy.rollNumber})` : ''}
+                    </span>
+                  </div>
+                  {item.claimedBy.claimedDate && (
+                    <div className="flex items-center text-gray-600 mb-2">
+                      <FaCalendarAlt className="mr-2" />
+                      <span>Claimed on: </span>
+                      <span className="font-medium ml-1">{formatDate(item.claimedBy.claimedDate)}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
             
@@ -185,10 +237,10 @@ const ItemDetails = () => {
                 <FaInfoCircle className="mr-2" />
                 Description
               </h3>
-              <p className="text-gray-600">{item.description}</p>
+              <p className="text-gray-600">{item.description || 'No description provided.'}</p>
             </div>
             
-            {item.status === 'available' && !isAdmin && (
+            {item.status === 'available' && !isGuard() && (
               <button
                 onClick={handleClaim}
                 className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition duration-300"
@@ -197,7 +249,7 @@ const ItemDetails = () => {
               </button>
             )}
             
-            {item.status === 'claimed' && isAdmin && (
+            {item.status === 'claimed' && isGuard() && (
               <button
                 onClick={handleMarkAsDelivered}
                 className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition duration-300"
@@ -205,27 +257,28 @@ const ItemDetails = () => {
                 Mark as Delivered
               </button>
             )}
-            
-            {item.status === 'delivered' && (
-              <div className="text-center p-3 bg-gray-100 rounded-lg">
-                <p className="text-gray-600">This item has been delivered to its owner.</p>
-              </div>
-            )}
           </div>
         </div>
       </div>
       
+      {/* Claim Form Modal */}
       {showClaimForm && (
-        <ClaimForm 
-          itemId={id} 
-          onClose={handleCloseForm} 
-          onSuccess={() => {
-            setItem((prevItem) => ({
-              ...prevItem,
-              status: 'claimed',
-            }));
-          }}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-auto relative">
+            <button 
+              onClick={handleCloseForm}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+            >
+              <FaTimes className="h-6 w-6" />
+            </button>
+            <div className="p-6">
+              <ClaimForm 
+                itemId={id} 
+                onClaimSubmitted={handleClaimSubmitted} 
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

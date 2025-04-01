@@ -114,8 +114,11 @@ const AddItem = () => {
       
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       
+      // Use the imported axios instance or directly call the API
+      const apiUrl = 'http://localhost:5000/api/items';
+      
       const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/api/items`,
+        apiUrl,
         itemFormData,
         {
           headers: {
@@ -127,12 +130,13 @@ const AddItem = () => {
       
       toast.success('Item added successfully!');
       
-      // Navigate to the dashboard or item details page after a brief delay
+      // Navigate to the dashboard after a brief delay
       setTimeout(() => {
-        navigate(`/items/${response.data._id}`);
+        navigate('/GuardDashboard');
       }, 1500);
       
     } catch (error) {
+      console.error("Error adding item:", error);
       const errorMessage = error.response?.data?.message || 'Failed to add item. Please try again.';
       toast.error(errorMessage);
     } finally {

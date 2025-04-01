@@ -81,14 +81,19 @@ export const AuthProvider = ({ children }) => {
   // Login function to be used by Login component
   const login = useCallback((username, password) => {
     return new Promise((resolve, reject) => {
-      // Replace with your actual API call
+      // Check against hardcoded credentials
       if (username === "pict_guard" && password === "secure@guard123") {
+        // Create a mock token for development
         const userData = {
           username: "pict_guard",
-          role: "security",
-          token: "generated-jwt-token" // In real app, get this from your backend
+          role: "guard",
+          token: "dev-jwt-token-for-guard-auth" // In production, get from backend
         };
+        
+        // Store in localStorage for API requests
         localStorage.setItem('token', userData.token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        
         setUser(userData);
         resolve(userData);
       } else {
@@ -99,27 +104,36 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
+    // Add a redirect to home page if needed
+    window.location.href = '/';
   }, []);
 
   const isAuthenticated = useCallback(() => {
     return !!localStorage.getItem('token');
   }, []);
 
-  const isSecurityGuard = useCallback(() => {
-    return user?.role === 'security';
+  const isGuard = useCallback(() => {
+    return user?.role === 'guard';
   }, [user]);
 
-  // Initialize auth state
+  // Initialize auth state from localStorage
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      // Verify token with backend in real app
-      setUser({
-        username: "pict_guard",
-        role: "security"
-      });
+    const userData = localStorage.getItem('user');
+    
+    if (token && userData) {
+      try {
+        // In production, verify token validity here
+        setUser(JSON.parse(userData));
+      } catch (error) {
+        // Invalid user data in localStorage
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
     }
+    
     setLoading(false);
   }, []);
 
@@ -131,7 +145,8 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         isAuthenticated,
-        isSecurityGuard
+        isGuard,
+        isSecurityGuard: isGuard // Alias for backward compatibility
       }}
     >
       {children}

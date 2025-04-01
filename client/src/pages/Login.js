@@ -1,7 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { FaLock, FaUser, FaShieldAlt } from "react-icons/fa";
+import { AuthContext } from "../context/AuthContext";
 
 const Login = () => {
+  const { login } = useContext(AuthContext);
+  const navigate = useNavigate();
+  
   const [credentials, setCredentials] = useState({
     username: "",
     password: "",
@@ -9,6 +14,7 @@ const Login = () => {
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setCredentials({
@@ -19,7 +25,7 @@ const Login = () => {
     setSuccess("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     const { username, password } = credentials;
@@ -30,15 +36,21 @@ const Login = () => {
       return;
     }
 
-    // Hardcoded authentication check
-    if (username === "pict_guard" && password === "secure@guard123") {
+    setLoading(true);
+    
+    try {
+      await login(username, password);
       setSuccess("Login successful!");
       setError(""); // Clear any previous error
+      
+      // Redirect after success
       setTimeout(() => {
-        window.location.href = "/GuardDashboard"; // Redirect after success
+        navigate("/GuardDashboard");
       }, 1500);
-    } else {
-      setError("Invalid username or password");
+    } catch (err) {
+      setError(err.message || "Invalid username or password");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -111,9 +123,12 @@ const Login = () => {
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+              disabled={loading}
+              className={`group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 ${
+                loading ? "opacity-70 cursor-not-allowed" : ""
+              }`}
             >
-              Sign in
+              {loading ? "Signing in..." : "Sign in"}
             </button>
           </div>
         </form>

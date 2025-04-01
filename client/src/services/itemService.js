@@ -20,7 +20,17 @@ axios.interceptors.request.use(
 const getAllItems = async () => {
   try {
     const response = await axios.get(API_URL);
-    return response.data.data; // Adjust based on your API response
+    console.log('API Response:', response.data);
+    
+    // Check response format and handle accordingly
+    if (response.data && response.data.data) {
+      return response.data.data; // Standard format returned by our API
+    } else if (Array.isArray(response.data)) {
+      return response.data; // Direct array of items
+    } else {
+      console.error('Unexpected API response format:', response.data);
+      return []; // Return empty array as fallback
+    }
   } catch (error) {
     console.error('Error fetching items:', error);
     throw error;
@@ -55,8 +65,18 @@ const getRecentItems = async (limit = 6) => {
 const searchItems = async (query) => {
   try {
     const response = await axios.get(`${API_URL}/search?q=${query}`);
-    return response.data;
+    
+    // Check response format and handle accordingly
+    if (response.data && response.data.data) {
+      return response.data.data; // Standard format returned by our API
+    } else if (Array.isArray(response.data)) {
+      return response.data; // Direct array of items
+    } else {
+      console.error('Unexpected API response format:', response.data);
+      return []; // Return empty array as fallback
+    }
   } catch (error) {
+    console.error('Error searching items:', error);
     throw error.response?.data || { message: 'Server error' };
   }
 };
@@ -141,19 +161,41 @@ const addItem = async (itemData) => {
 // Update item
 const updateItem = async (id, itemData) => {
   try {
-    const response = await axios.put(`${API_URL}/${id}`, itemData);
+    // Check if itemData is FormData (has image) or regular object
+    const isFormData = itemData instanceof FormData;
+    
+    const headers = {};
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
+    
+    const response = await axios.put(`${API_URL}/${id}`, itemData, { 
+      headers 
+    });
+    
     return response.data;
   } catch (error) {
+    console.error("Error updating item:", error);
     throw error.response?.data || { message: 'Server error' };
   }
 };
 
 // Update item status (claimed/delivered)
-const updateItemStatus = async (id, status) => {
+const updateItemStatus = async (id, statusData) => {
   try {
-    const response = await axios.patch(`${API_URL}/${id}/status`, { status });
+    // For marking items as delivered, preserve claimed information
+    const method = statusData.status === 'delivered' ? 'put' : 'patch';
+    const endpoint = statusData.status === 'delivered' ? `${API_URL}/${id}/delivered` : `${API_URL}/${id}/status`;
+    
+    const response = await axios[method](endpoint, statusData, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    
     return response.data;
   } catch (error) {
+    console.error("Error updating item status:", error);
     throw error.response?.data || { message: 'Server error' };
   }
 };
@@ -161,10 +203,23 @@ const updateItemStatus = async (id, status) => {
 // Mark item as claimed/delivered
 const claimItem = async (id, claimData) => {
   try {
-    const response = await axios.put(`${API_URL}/${id}/claim`, claimData);
+    const url = `${API_URL}/${id}/claim`;
+    console.log("Claiming item:", id);
+    
+    const response = await axios.put(url, claimData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    
     return response.data;
   } catch (error) {
-    throw error.response?.data || { message: 'Server error' };
+    console.error("Error claiming item:", error);
+    // Provide more detailed error message
+    const errorMessage = error.response?.data?.message || 
+                        error.message || 
+                        'Failed to claim item. Please try again.';
+    throw { message: errorMessage };
   }
 };
 

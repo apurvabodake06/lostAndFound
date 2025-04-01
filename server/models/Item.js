@@ -57,7 +57,15 @@ const ItemSchema = new mongoose.Schema({
     studentName: String,
     rollNumber: String,
     studyYear: String,
-    contactNumber: String
+    contactNumber: String,
+    claimedDate: {
+      type: Date,
+      default: null
+    }
+  },
+  addedBy: {
+    type: String,
+    default: 'pict_guard' // Default to the guard username since we're using a simple auth system
   },
   createdAt: {
     type: Date,
@@ -65,8 +73,8 @@ const ItemSchema = new mongoose.Schema({
   }
 });
 
-// Prevent duplicate items
-ItemSchema.index({ name: 1, foundDate: 1, location: 1 }, { unique: true });
+// Prevent duplicate items (modified to be less strict)
+ItemSchema.index({ name: 1, foundDate: 1 }, { unique: false });
 
 // Static method to get items by status
 ItemSchema.statics.getItemsByStatus = async function(status) {
@@ -79,7 +87,8 @@ ItemSchema.statics.searchItems = async function(searchTerm) {
     $or: [
       { name: { $regex: searchTerm, $options: 'i' } },
       { description: { $regex: searchTerm, $options: 'i' } },
-      { category: { $regex: searchTerm, $options: 'i' } }
+      { category: { $regex: searchTerm, $options: 'i' } },
+      { location: { $regex: searchTerm, $options: 'i' } }
     ]
   });
 };

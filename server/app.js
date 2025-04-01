@@ -28,8 +28,16 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static files
+// Ensure uploads directory exists
+const uploadDir = path.join(__dirname, 'public/uploads');
+const fs = require('fs');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Static files - serve the public directory
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Route Registration
 app.use('/', require('./routes')); // Main API routes
@@ -69,6 +77,7 @@ app._router.stack.forEach(middleware => {
 const PORT = config.PORT || 5000;
 const server = app.listen(PORT, () => {
   console.log(`Server running in ${config.NODE_ENV} mode on port ${PORT}`);
+  console.log(`Server is accessible at http://localhost:${PORT}`);
 });
 
 // Handle server errors

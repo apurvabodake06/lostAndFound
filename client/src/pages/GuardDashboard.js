@@ -2,8 +2,11 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { Tab } from '@headlessui/react';
 import { AuthContext } from '../context/AuthContext';
-import { getItems, updateItemStatus, deleteItem } from '../services/itemService';
-import { PlusIcon, PencilIcon, TrashIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { getItems, deleteItem } from '../services/itemService';
+import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import EditItemModal from '../components/EditItemModal';
+import ConfirmationModal from '../components/ConfirmationModal';
+import SuccessModal from '../components/SuccessModal';
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(' ');
@@ -15,29 +18,13 @@ const GuardDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [claimFormVisible, setClaimFormVisible] = useState({});
-  const [claimData, setClaimData] = useState({
-    studentName: '',
-    rollNumber: '',
-    studyYear: '',
-    contactNumber: ''
-  });
-
-  // const getItems = async () => {
-  //   try {
-  //     const response = await fetch('http://localhost:5000/api/v1/items');
   
-  //     if (!response.ok) {
-  //       throw new Error('Failed to fetch items');
-  //     }
-  
-  //     return await response.json();
-  //   } catch (error) {
-  //     console.error("Error fetching items:", error.message);
-  //     throw error;
-  //   }
-  // };
-  
+  // State for modals
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [selectedItem, setSelectedItem] = useState(null);
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -67,55 +54,79 @@ const GuardDashboard = () => {
     );
   });
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
-      try {
-        await deleteItem(id);
-        setItems(items.filter(item => item._id !== id));
-      } catch (err) {
-        setError('Failed to delete item');
-      }
+  // Handle opening edit modal
+  const handleEditClick = (item) => {
+    // Only allow editing available items
+    if (item.status !== 'available') {
+      setSuccessMessage('Only available items can be edited');
+      setSuccessModalOpen(true);
+      return;
     }
+    
+    setSelectedItem(item);
+    setEditModalOpen(true);
   };
 
-  const toggleClaimForm = (id) => {
-    setClaimFormVisible({
-      ...claimFormVisible,
-      [id]: !claimFormVisible[id]
-    });
-    setClaimData({
-      studentName: '',
-      rollNumber: '',
-      studyYear: '',
-      contactNumber: ''
-    });
+  // Handle opening delete confirmation modal
+  const handleDeleteClick = (item) => {
+    setSelectedItem(item);
+    setDeleteModalOpen(true);
   };
 
-  const handleClaimChange = (e) => {
-    setClaimData({
-      ...claimData,
-      [e.target.name]: e.target.value
-    });
+  // Handle successful item edit
+  const handleEditSuccess = () => {
+    // Update the items list with the edited item
+    setItems(items.map(item => 
+      item._id === selectedItem._id 
+        ? { ...item, ...selectedItem } 
+        : item
+    ));
+    setEditModalOpen(false);
+    setSuccessMessage('Item updated successfully!');
+    setSuccessModalOpen(true);
+    
+    // Refresh the items list
+    fetchItems();
   };
 
-  const handleClaimSubmit = async (id) => {
+  // Handle item deletion
+  const handleDeleteConfirm = async () => {
     try {
-      await updateItemStatus(id, {
-        status: 'delivered',
-        claimedBy: claimData
-      });
-      
-      // Update item in local state
-      setItems(items.map(item => 
-        item._id === id 
-          ? { ...item, status: 'delivered', claimedBy: claimData } 
-          : item
-      ));
-      
-      toggleClaimForm(id);
+      await deleteItem(selectedItem._id);
+      setItems(items.filter(item => item._id !== selectedItem._id));
+      setSuccessMessage('Item deleted successfully!');
+      setSuccessModalOpen(true);
     } catch (err) {
-      setError('Failed to update item status');
+      setError('Failed to delete item');
     }
+  };
+
+  // Fetch items helper function (reusable)
+  const fetchItems = async () => {
+    try {
+      const data = await getItems();
+      setItems(data);
+    } catch (err) {
+      setError('Failed to fetch items');
+    }
+  };
+
+  // Get the proper image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return '/assets/images/placeholder.png';
+    
+    // If it's a full URL already, return as is
+    if (imagePath.startsWith('http')) return imagePath;
+    
+    // Otherwise, prepend the server URL
+    return `http://localhost:5000${imagePath}`;
+  };
+
+  // Format date helper function
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    // Convert to dd-mm-yyyy format
+    return new Date(dateString).toLocaleDateString('en-GB');
   };
 
   if (loading) return <div className="flex justify-center items-center h-screen">Loading dashboard...</div>;
@@ -170,7 +181,7 @@ const GuardDashboard = () => {
               )
             }
           >
-            Unclaimed ({items.filter(item => item.status === 'unclaimed').length})
+            Claimed ({items.filter(item => item.status === 'claimed').length})
           </Tab>
           <Tab
             className={({ selected }) =>
@@ -204,132 +215,51 @@ const GuardDashboard = () => {
                 <tbody>
                   {filteredItems.length > 0 ? (
                     filteredItems.map(item => (
-                      <React.Fragment key={item._id}>
-                        <tr className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="py-3 px-4">
-                            <img 
-                              src={item.image} 
-                              alt={item.name} 
-                              className="w-16 h-16 object-cover rounded"
-                            />
-                          </td>
-                          <td className="py-3 px-4 font-medium">{item.name}</td>
-                          <td className="py-3 px-4">{item.category}</td>
-                          <td className="py-3 px-4">{new Date(item.createdAt).toLocaleDateString()}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded-full text-xs ${
-                              item.status === 'delivered' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex space-x-2">
-                              <Link to={`/edit-item/${item._id}`} className="text-blue-600 hover:text-blue-800">
-                                <PencilIcon className="h-5 w-5" />
-                              </Link>
-                              <button 
-                                onClick={() => handleDelete(item._id)} 
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                <TrashIcon className="h-5 w-5" />
-                              </button>
-                              {item.status === 'unclaimed' && (
-                                <button 
-                                  onClick={() => toggleClaimForm(item._id)} 
-                                  className="text-green-600 hover:text-green-800"
-                                >
-                                  <CheckIcon className="h-5 w-5" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                        {claimFormVisible[item._id] && (
-                          <tr>
-                            <td colSpan="6" className="py-4 px-6 bg-gray-50">
-                              <div className="bg-white p-4 rounded-lg shadow">
-                                <h3 className="text-lg font-medium mb-4">Mark as Delivered</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                      Student Name
-                                    </label>
-                                    <input
-                                      type="text"
-                                      name="studentName"
-                                      value={claimData.studentName}
-                                      onChange={handleClaimChange}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                      required
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                      Roll Number
-                                    </label>
-                                    <input
-                                      type="text"
-                                      name="rollNumber"
-                                      value={claimData.rollNumber}
-                                      onChange={handleClaimChange}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                      required
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                      Study Year
-                                    </label>
-                                    <select
-                                      name="studyYear"
-                                      value={claimData.studyYear}
-                                      onChange={handleClaimChange}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                      required
-                                    >
-                                      <option value="">Select Year</option>
-                                      <option value="First Year">First Year</option>
-                                      <option value="Second Year">Second Year</option>
-                                      <option value="Third Year">Third Year</option>
-                                      <option value="Final Year">Final Year</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                                      Contact Number
-                                    </label>
-                                    <input
-                                      type="text"
-                                      name="contactNumber"
-                                      value={claimData.contactNumber}
-                                      onChange={handleClaimChange}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                      required
-                                    />
-                                  </div>
-                                </div>
-                                <div className="flex justify-end mt-4 space-x-2">
-                                  <button
-                                    onClick={() => toggleClaimForm(item._id)}
-                                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={() => handleClaimSubmit(item._id)}
-                                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                                  >
-                                    Confirm Delivery
-                                  </button>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
+                      <tr key={item._id} className="border-b border-gray-200 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <img
+                            src={getImageUrl(item.image)}
+                            alt={item.name}
+                            className="h-16 w-16 object-cover rounded"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = '/assets/images/placeholder.png';
+                            }}
+                          />
+                        </td>
+                        <td className="py-3 px-4 font-medium">{item.name}</td>
+                        <td className="py-3 px-4">{item.category}</td>
+                        <td className="py-3 px-4">{formatDate(item.createdAt)}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            item.status === 'delivered' 
+                              ? 'bg-green-100 text-green-800' 
+                              : item.status === 'claimed'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex space-x-3">
+                            <button 
+                              onClick={() => handleEditClick(item)} 
+                              className={`${item.status === 'available' ? 'text-blue-600 hover:text-blue-800' : 'text-gray-400 cursor-not-allowed'}`}
+                              disabled={item.status !== 'available'}
+                              title={item.status === 'available' ? 'Edit item' : 'Only available items can be edited'}
+                            >
+                              <PencilIcon className="h-5 w-5" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteClick(item)} 
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <TrashIcon className="h-5 w-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                     ))
                   ) : (
                     <tr>
@@ -352,134 +282,63 @@ const GuardDashboard = () => {
                     <th className="py-3 px-4 text-left">Item Name</th>
                     <th className="py-3 px-4 text-left">Category</th>
                     <th className="py-3 px-4 text-left">Found Date</th>
+                    <th className="py-3 px-4 text-left">Claimed By</th>
+                    <th className="py-3 px-4 text-left">Claimed Date</th>
                     <th className="py-3 px-4 text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredItems.filter(item => item.status === 'unclaimed').length > 0 ? (
+                  {filteredItems.filter(item => item.status === 'claimed').length > 0 ? (
                     filteredItems
-                      .filter(item => item.status === 'unclaimed')
+                      .filter(item => item.status === 'claimed')
                       .map(item => (
-                        <React.Fragment key={item._id}>
-                          <tr className="border-b border-gray-200 hover:bg-gray-50">
-                            <td className="py-3 px-4">
-                              <img 
-                                src={item.image} 
-                                alt={item.name} 
-                                className="w-16 h-16 object-cover rounded"
-                              />
-                            </td>
-                            <td className="py-3 px-4 font-medium">{item.name}</td>
-                            <td className="py-3 px-4">{item.category}</td>
-                            <td className="py-3 px-4">{new Date(item.createdAt).toLocaleDateString()}</td>
-                            <td className="py-3 px-4">
-                              <div className="flex space-x-2">
-                                <Link to={`/edit-item/${item._id}`} className="text-blue-600 hover:text-blue-800">
-                                  <PencilIcon className="h-5 w-5" />
-                                </Link>
-                                <button 
-                                  onClick={() => handleDelete(item._id)} 
-                                  className="text-red-600 hover:text-red-800"
-                                >
-                                  <TrashIcon className="h-5 w-5" />
-                                </button>
-                                <button 
-                                  onClick={() => toggleClaimForm(item._id)} 
-                                  className="text-green-600 hover:text-green-800"
-                                >
-                                  <CheckIcon className="h-5 w-5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                          {claimFormVisible[item._id] && (
-                            <tr>
-                              <td colSpan="5" className="py-4 px-6 bg-gray-50">
-                                <div className="bg-white p-4 rounded-lg shadow">
-                                  <h3 className="text-lg font-medium mb-4">Mark as Delivered</h3>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Student Name
-                                      </label>
-                                      <input
-                                        type="text"
-                                        name="studentName"
-                                        value={claimData.studentName}
-                                        onChange={handleClaimChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                        required
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Roll Number
-                                      </label>
-                                      <input
-                                        type="text"
-                                        name="rollNumber"
-                                        value={claimData.rollNumber}
-                                        onChange={handleClaimChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                        required
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Study Year
-                                      </label>
-                                      <select
-                                        name="studyYear"
-                                        value={claimData.studyYear}
-                                        onChange={handleClaimChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                        required
-                                      >
-                                        <option value="">Select Year</option>
-                                        <option value="First Year">First Year</option>
-                                        <option value="Second Year">Second Year</option>
-                                        <option value="Third Year">Third Year</option>
-                                        <option value="Final Year">Final Year</option>
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Contact Number
-                                      </label>
-                                      <input
-                                        type="text"
-                                        name="contactNumber"
-                                        value={claimData.contactNumber}
-                                        onChange={handleClaimChange}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                        required
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="flex justify-end mt-4 space-x-2">
-                                    <button
-                                      onClick={() => toggleClaimForm(item._id)}
-                                      className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      onClick={() => handleClaimSubmit(item._id)}
-                                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                                    >
-                                      Confirm Delivery
-                                    </button>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
+                        <tr key={item._id} className="border-b border-gray-200 hover:bg-gray-50">
+                          <td className="py-3 px-4">
+                            <img
+                              src={getImageUrl(item.image)}
+                              alt={item.name}
+                              className="h-16 w-16 object-cover rounded"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = '/assets/images/placeholder.png';
+                              }}
+                            />
+                          </td>
+                          <td className="py-3 px-4 font-medium">{item.name}</td>
+                          <td className="py-3 px-4">{item.category}</td>
+                          <td className="py-3 px-4">{formatDate(item.foundDate)}</td>
+                          <td className="py-3 px-4">
+                            {item.claimedBy?.studentName}<br/>
+                            <span className="text-xs text-gray-500">
+                              {item.claimedBy?.rollNumber}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            {formatDate(item.claimedBy?.claimedDate)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex space-x-3">
+                              <button 
+                                className="text-gray-400 cursor-not-allowed"
+                                disabled={true}
+                                title="Only available items can be edited"
+                              >
+                                <PencilIcon className="h-5 w-5" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteClick(item)} 
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                <TrashIcon className="h-5 w-5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
                       ))
                   ) : (
                     <tr>
-                      <td colSpan="5" className="py-8 text-center text-gray-500">
-                        No unclaimed items found
+                      <td colSpan="7" className="py-8 text-center text-gray-500">
+                        No claimed items found
                       </td>
                     </tr>
                   )}
@@ -508,10 +367,14 @@ const GuardDashboard = () => {
                       .map(item => (
                         <tr key={item._id} className="border-b border-gray-200 hover:bg-gray-50">
                           <td className="py-3 px-4">
-                            <img 
-                              src={item.image} 
-                              alt={item.name} 
-                              className="w-16 h-16 object-cover rounded"
+                            <img
+                              src={getImageUrl(item.image)}
+                              alt={item.name}
+                              className="h-16 w-16 object-cover rounded"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = '/assets/images/placeholder.png';
+                              }}
                             />
                           </td>
                           <td className="py-3 px-4 font-medium">{item.name}</td>
@@ -523,11 +386,11 @@ const GuardDashboard = () => {
                             </span>
                           </td>
                           <td className="py-3 px-4">
-                            {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'N/A'}
+                            {formatDate(item.claimedBy?.claimedDate)}
                           </td>
                           <td className="py-3 px-4">
                             <button 
-                              onClick={() => handleDelete(item._id)} 
+                              onClick={() => handleDeleteClick(item)} 
                               className="text-red-600 hover:text-red-800"
                             >
                               <TrashIcon className="h-5 w-5" />
@@ -548,6 +411,36 @@ const GuardDashboard = () => {
           </Tab.Panel>
         </Tab.Panels>
       </Tab.Group>
+      
+      {/* Edit Item Modal */}
+      {selectedItem && (
+        <EditItemModal
+          isOpen={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          item={selectedItem}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+      
+      {/* Delete Confirmation Modal */}
+      {selectedItem && (
+        <ConfirmationModal
+          isOpen={deleteModalOpen}
+          onClose={() => setDeleteModalOpen(false)}
+          onConfirm={handleDeleteConfirm}
+          title="Delete Item"
+          message={`Are you sure you want to delete "${selectedItem.name}"? This action cannot be undone.`}
+          confirmText="Yes, Delete"
+          cancelText="Cancel"
+        />
+      )}
+      
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={successModalOpen}
+        onClose={() => setSuccessModalOpen(false)}
+        message={successMessage}
+      />
     </div>
   );
 };

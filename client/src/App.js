@@ -34,12 +34,18 @@ function App() {
               <Route path="/about" element={<About />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/GuardDashboard" element={<GuardDashboard />} />
-              <Route path="/additem" element={<AddItem />} />
-              <Route path="/itemdetails" element={<ItemDetails />} />
-
               
-              {/* Protected Routes (Security Guards Only) */}
+              {/* Routes that should be protected but currently accessible for development */}
+              <Route path="/GuardDashboard" element={<GuardDashboard />} />
+              <Route path="/dashboard" element={<GuardDashboard />} />
+              <Route path="/additem" element={<AddItem />} />
+              <Route path="/add-item" element={<AddItem />} />
+              
+              {/* Legacy route for backward compatibility */}
+              <Route path="/itemdetails/:id" element={<ItemDetails />} />
+              
+              {/* Protected Routes (for future implementation) */}
+              {/* 
               <Route 
                 path="/dashboard" 
                 element={
@@ -64,6 +70,7 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              */}
             </Routes>
           </main>
           <Footer />

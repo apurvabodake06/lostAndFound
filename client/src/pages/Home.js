@@ -11,10 +11,11 @@ const Home = () => {
   useEffect(() => {
     const fetchRecentItems = async () => {
       try {
-        const data = await getRecentItems();
-        setRecentItems(data);
+        const response = await getRecentItems(8); // Fetch 8 recent items
+        setRecentItems(response.data || response); // Handle both response formats
         setLoading(false);
       } catch (err) {
+        console.error('Error fetching recent items:', err);
         setError('Failed to load recent items');
         setLoading(false);
       }
@@ -134,8 +135,21 @@ const Home = () => {
             <div className="text-center py-12">
               <p className="text-red-500">{error}</p>
               <button 
-                onClick={() => window.location.reload()}
-                className="mt-4 text-primary-600 hover:text-primary-700"
+                onClick={() => {
+                  setLoading(true);
+                  setError(null);
+                  getRecentItems(8)
+                    .then(data => {
+                      setRecentItems(data.data || data);
+                      setLoading(false);
+                    })
+                    .catch(err => {
+                      console.error('Error retrying:', err);
+                      setError('Failed to load recent items');
+                      setLoading(false);
+                    });
+                }}
+                className="mt-4 px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700"
               >
                 Try Again
               </button>
@@ -149,6 +163,7 @@ const Home = () => {
               ) : (
                 <div className="col-span-full text-center py-12">
                   <p className="text-secondary-500">No items have been found recently.</p>
+                  <p className="mt-2 text-sm text-secondary-400">Check back later or contact the lost and found office.</p>
                 </div>
               )}
             </div>
