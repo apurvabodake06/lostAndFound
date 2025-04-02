@@ -204,17 +204,20 @@ const updateItemStatus = async (id, statusData) => {
 const claimItem = async (id, claimData) => {
   try {
     const url = `${API_URL}/${id}/claim`;
-    console.log("Claiming item:", id);
+    console.log("Claiming item with ID:", id);
+    console.log("Claim data being sent:", claimData);
     
     const response = await axios.put(url, claimData, {
       headers: {
-        'Content-Type': 'multipart/form-data'
+        'Content-Type': 'application/json'
       }
     });
     
+    console.log("Server response:", response.data);
     return response.data;
   } catch (error) {
     console.error("Error claiming item:", error);
+    console.error("Response data:", error.response?.data);
     // Provide more detailed error message
     const errorMessage = error.response?.data?.message || 
                         error.message || 

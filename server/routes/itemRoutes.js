@@ -27,7 +27,9 @@ router.post('/', upload.single('image'), createItem);
 router.put('/:id/claim', async (req, res) => {
   try {
     const itemId = req.params.id;
-    const { studentName, studentId, studentYear, contactNumber, claimedDate } = req.body;
+    
+    // Log the request body to see what's coming in
+    console.log('Claim request body:', JSON.stringify(req.body, null, 2));
     
     // Get the item from the database
     const Item = require('../models/Item');
@@ -48,28 +50,52 @@ router.put('/:id/claim', async (req, res) => {
       });
     }
     
-    // Update the item status and claimant info
-    item.status = 'claimed';
-    item.claimedBy = {
-      studentName,
-      rollNumber: studentId,
-      studyYear: studentYear,
-      contactNumber,
-      claimedDate: claimedDate || new Date() // Use provided date or current date
+    // Prepare the claimedBy data, ensuring all keys are correctly mapped
+    const claimedBy = {
+      studentName: req.body.studentName,
+      rollNumber: req.body.studentId,  // Map studentId to rollNumber as per model
+      studyYear: req.body.studentYear,
+      contactNumber: req.body.contactNumber,
+      claimedDate: req.body.claimedDate || new Date()
     };
     
-    await item.save();
+    // Log the prepared claimedBy data
+    console.log('Prepared claimedBy data:', JSON.stringify(claimedBy, null, 2));
+    
+    // Update the item directly using findByIdAndUpdate to ensure atomic update
+    const updatedItem = await Item.findByIdAndUpdate(
+      itemId,
+      { 
+        status: 'claimed',
+        claimedBy: claimedBy
+      },
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    );
+    
+    if (!updatedItem) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update item'
+      });
+    }
+    
+    // Log the updated item to verify
+    console.log('Updated item:', JSON.stringify(updatedItem, null, 2));
     
     res.status(200).json({
       success: true,
       message: 'Item claimed successfully',
-      data: item
+      data: updatedItem
     });
   } catch (error) {
     console.error('Error claiming item:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while claiming item'
+      message: 'Server error while claiming item',
+      error: error.message
     });
   }
 });

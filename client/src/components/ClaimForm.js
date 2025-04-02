@@ -31,37 +31,40 @@ const ClaimForm = ({ itemId, onClaimSubmitted }) => {
     setIsSubmitting(true);
     
     try {
-      // Create FormData object for file upload
-      const claimFormData = new FormData();
-      claimFormData.append('studentName', formData.studentName);
-      claimFormData.append('studentId', formData.studentId);
-      claimFormData.append('studentYear', formData.studentYear);
-      claimFormData.append('contactNumber', formData.contactNumber);
+      // Build claim data object with exact field names matching what server expects
+      const claimData = {
+        studentName: formData.studentName,
+        studentId: formData.studentId,     // This gets mapped to rollNumber in the backend
+        studentYear: formData.studentYear, // This gets mapped to studyYear in the backend
+        contactNumber: formData.contactNumber,
+        claimedDate: new Date().toISOString()
+      };
       
-      // Add current date as claimedDate
-      claimFormData.append('claimedDate', new Date().toISOString());
+      console.log('Submitting claim data:', claimData);
       
       // Use the API to claim the item
       try {
-        await claimItem(itemId, claimFormData);
+        const response = await claimItem(itemId, claimData);
+        console.log('Claim response:', response);
+        
+        // Reset form
+        setFormData({
+          studentName: '',
+          studentId: '',
+          studentYear: '',
+          contactNumber: ''
+        });
+        
+        // Notify parent component
+        if (onClaimSubmitted) {
+          onClaimSubmitted();
+        }
       } catch (error) {
-        // For development, just simulate success
-        console.warn("API call failed, but proceeding as if successful:", error);
-      }
-      
-      // Reset form
-      setFormData({
-        studentName: '',
-        studentId: '',
-        studentYear: '',
-        contactNumber: ''
-      });
-      
-      // Notify parent component
-      if (onClaimSubmitted) {
-        onClaimSubmitted();
+        console.error('Error submitting claim:', error);
+        toast.error(error.message || 'Failed to submit claim. Please try again.');
       }
     } catch (error) {
+      console.error('Form submission error:', error);
       toast.error(error.message || 'Failed to submit claim. Please try again.');
     } finally {
       setIsSubmitting(false);
