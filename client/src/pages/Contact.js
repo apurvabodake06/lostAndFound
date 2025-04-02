@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { FaPhone, FaEnvelope, FaMapMarkerAlt, FaUser, FaPaperPlane } from 'react-icons/fa';
+import emailjs from '@emailjs/browser';
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -21,7 +22,7 @@ const Contact = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+        
     // Form validation
     if (!formData.name || !formData.email || !formData.message) {
       toast.error('Please fill in all required fields');
@@ -29,12 +30,14 @@ const Contact = () => {
     }
 
     setLoading(true);
-
     // In a real application, this would send data to a backend endpoint
     // This is a simulated API call
     try {
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000));
+
+      //to send email
+    emailjs.sendForm('service_2cpr4er','template_agh0n2s',e.target,'T3iiHRgOkAe50F-ub');
       
       // Reset form
       setFormData({
@@ -50,7 +53,9 @@ const Contact = () => {
     } finally {
       setLoading(false);
     }
-  };
+
+    
+      };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -126,7 +131,7 @@ const Contact = () => {
               </div>
               
               <div className="mb-4">
-                <label htmlFor="email" className="block text-gray-700 mb-2">Your Email*</label>
+                <label htmlFor="email" className="block text-gray-700 mb-2" name='email'>Your Email*</label>
                 <div className="relative">
                   <div className="absolute left-3 top-3 text-gray-400">
                     <FaEnvelope />
@@ -145,7 +150,7 @@ const Contact = () => {
               </div>
               
               <div className="mb-4">
-                <label htmlFor="subject" className="block text-gray-700 mb-2">Subject</label>
+                <label htmlFor="subject" className="block text-gray-700 mb-2" name="subject">Subject</label>
                 <input
                   type="text"
                   id="subject"
